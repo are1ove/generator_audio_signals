@@ -1,6 +1,7 @@
 import os
 import random
 from tqdm import tqdm
+from datetime import timedelta
 
 import scipy
 import librosa
@@ -52,13 +53,23 @@ def merge_audio(tracks, dataset_dir, average_pause):
         name_of_file = f'{tracks_dir.split("/")[-2]}.wav'
         sf.write(name_of_file, res, sample_rate)
         silence_segment = AudioSegment.silent(duration=average_pause)
-
+        silence = timedelta(milliseconds=average_pause)
         speech = AudioSegment.from_wav(name_of_file)
+
         if first:
+            start_time = silence + timedelta(seconds=speech.duration_seconds)
             speech_with_silence = silence_segment + speech + silence_segment
+            with open('markup.txt', 'w') as f:
+                f.write(f"{timedelta()} - silence\n")
+                f.write(f"{silence} - {name_of_file}\n")
+                f.write(f"{start_time} - silence\n")
             first = False
         else:
             speech_with_silence = speech_with_silence + speech + silence_segment
+            with open('markup.txt', 'a') as f:
+                f.write(f"{start_time + silence} - {name_of_file}\n")
+                f.write(f"{start_time + silence + timedelta(seconds=speech.duration_seconds)} - silence\n")
+            start_time = start_time + timedelta(seconds=speech.duration_seconds) + silence
 
     speech_with_silence.export('output_test.wav', format="wav")
     # TODO write speaking time in markup file
