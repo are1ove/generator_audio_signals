@@ -6,6 +6,7 @@ import scipy
 import librosa
 import numpy as np
 import soundfile as sf
+from pydub import AudioSegment
 
 
 def choose_speakers(dataset_dir, num_of_speakers, min_duration, max_duration):
@@ -30,9 +31,11 @@ def choose_speakers(dataset_dir, num_of_speakers, min_duration, max_duration):
     return speakers_with_tracks
 
 
-def merge_audio(tracks, dataset_dir):
+def merge_audio(tracks, dataset_dir, average_pause):
     res = None
     sample_rate = None
+    merged_audio = []
+    first = True
     for speaker in tracks.keys():
         print(speaker)
         tracks_dir = f'{dataset_dir}/{speaker}/'
@@ -46,13 +49,21 @@ def merge_audio(tracks, dataset_dir):
             second_part, sample_rate = librosa.load(track2, duration=5)
             # TODO add micsher to audio
             res = np.append(first_part, second_part)
+        name_of_file = f'{tracks_dir.split("/")[-2]}.wav'
+        sf.write(name_of_file, res, sample_rate)
+        silence_segment = AudioSegment.silent(duration=average_pause)
 
-        sf.write(f'{tracks_dir.split("/")[-2]}.wav', res, sample_rate)
-        # TODO add pause after each speaker
-        # TODO write speaking time in markup file
-        # TODO merge speakers
+        speech = AudioSegment.from_wav(name_of_file)
+        if first:
+            speech_with_silence = silence_segment + speech + silence_segment
+            first = False
+        else:
+            speech_with_silence = speech_with_silence + speech + silence_segment
 
-    return merged_audio, markup_file
+    speech_with_silence.export('output_test.wav', format="wav")
+    # TODO write speaking time in markup file
+
+    return speech_with_silence  # , markup_file
 
 
 def add_noise(noise_file, signal_and_noise):
@@ -63,9 +74,9 @@ def add_background(background, background_level):
     pass
 
 
-def main(dataset_dir, num_of_speakers, min_duration, max_duration):
+def main(dataset_dir, num_of_speakers, min_duration, max_duration, average_pause):
     speakers_with_tracks = choose_speakers(dataset_dir, num_of_speakers, min_duration, max_duration)
-    merge_audio(speakers_with_tracks, dataset_dir)
+    merge_audio(speakers_with_tracks, dataset_dir, average_pause)
 
 
 def change_rate(sample_rate):
@@ -77,15 +88,11 @@ if __name__ == '__main__':
     num_of_speakers = int(input("num_of_speakers: "))
     min_duration = float(input("min_duration: "))
     max_duration = float(input("max_duration: "))
-    # average_pause = int(input("average_pause: "))
+    average_pause = int(input("average_pause in ms: "))
     # output_duration = int(input("output_duration: "))
     # signal_and_noise = int(input("signal_and_noise: "))
     # noise_file = str(input("noise_file: "))
     # background = str(input("background: "))
     # background_level = int(input("background_level: "))
     # sample_rate = float(input("sample_rate: "))
-    main(dataset_dir, num_of_speakers, min_duration, max_duration)
-
-    # tracks = ['0.wav', '1.wav', '2.wav', '3.wav', '4.wav', '5.wav']
-    # tracks_dir = '/Users/valeriy/Documents/sMedX/generator_test_signals/16000_pcm_speeches/Benjamin_Netanyau'
-    # merge_audio(list_of_speakers['Benjamin_Netanyau'], dataset_dir)
+    main(dataset_dir, num_of_speakers, min_duration, max_duration, average_pause)
