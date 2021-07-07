@@ -8,6 +8,7 @@ import librosa
 import numpy as np
 import soundfile as sf
 from pydub import AudioSegment
+from pydub.generators import WhiteNoise
 
 
 def choose_speakers(dataset_dir, num_of_speakers, min_duration, max_duration):
@@ -41,7 +42,7 @@ def merge_audio(tracks, dataset_dir, average_pause, output_duration, sample_rate
     for speaker in tracks.keys():
         print(speaker)
         tracks_dir = f'{dataset_dir}/{speaker}/'
-        for i in range(0, len(tracks[speaker]) - 1):
+        for i in tqdm(range(0, len(tracks[speaker]) - 1)):
             if i == 0:
                 track1 = f'{tracks_dir}/{tracks[speaker][i]}'
                 x, s_r = librosa.load(track1, duration=5)
@@ -73,8 +74,7 @@ def merge_audio(tracks, dataset_dir, average_pause, output_duration, sample_rate
                 f.write(f"{start_time + silence} - {name_of_file}\n")
                 f.write(f"{start_time + silence + timedelta(seconds=speech.duration_seconds)} - silence\n")
             start_time = start_time + timedelta(seconds=speech.duration_seconds) + silence
-        if start_time >= timedelta(seconds=output_duration):  # TODO compare output audio duration and desired time
-            break
+        # TODO compare output audio duration and desired time
 
     speech_with_silence.export('output_test.wav', format="wav")
 
@@ -84,12 +84,48 @@ def merge_audio(tracks, dataset_dir, average_pause, output_duration, sample_rate
 def add_noise(signal, signal_and_noise, kind_of_noise):
     # TODO add_noise
     if kind_of_noise == 'white':
-        noise = np.random.normal(0.0, 1.0, 1000)
-        signal = signal + noise / signal_and_noise
+        # noise = np.random.normal(0.0, 1.0, 1000)
+        # signal = signal + noise #/ signal_and_noise
+        noise = WhiteNoise().to_audio_segment(duration=len(signal))
+        combined = signal.overlay(noise)
     elif kind_of_noise == 'brown':
-        noise = ''
-        signal = signal + noise / signal_and_noise
-    return signal
+        exponent = 2
+        fmin = 0
+        size = [5]
+
+        samples = size[-1]
+
+        f = np.fft.rfftfreq(samples)
+
+        s_scale = f
+        fmin = max(fmin, 1. / samples)
+        ix = np.sum(s_scale < fmin)
+        if ix and ix < len(s_scale):
+            s_scale[:ix] = s_scale[ix]
+        s_scale = s_scale ** (-exponent / 2.)
+
+        w = s_scale[1:].copy()
+        w[-1] *= (1 + (samples % 2)) / 2.
+        sigma = 2 * np.sqrt(np.sum(w ** 2)) / samples
+
+        size[-1] = len(f)
+
+        dims_to_add = len(size) - 1
+        s_scale = s_scale[(np.newaxis,) * dims_to_add + (Ellipsis,)]
+
+        sr = np.random.normal(scale=s_scale, size=size)
+        si = np.random.normal(scale=s_scale, size=size)
+
+        if not (samples % 2): si[..., -1] = 0
+
+        si[..., 0] = 0
+
+        s = sr + 1J * si
+        noise = np.fft.irfft(s, n=samples, axis=-1) / sigma
+
+        combined = signal + noise  # / signal_and_noise
+    combined.export('output_with_noise.wav', format="wav")
+    return combined
 
 
 def add_background(background, background_level):
