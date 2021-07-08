@@ -82,62 +82,37 @@ def merge_audio(tracks, dataset_dir, average_pause, output_duration, sample_rate
 
 
 def add_noise(signal, signal_and_noise, kind_of_noise):
-    # TODO add_noise
     if kind_of_noise == 'white':
         # noise = np.random.normal(0.0, 1.0, 1000)
         # signal = signal + noise #/ signal_and_noise
         noise = WhiteNoise().to_audio_segment(duration=len(signal))
         combined = signal.overlay(noise)
+        # TODO change to signal_and_noise ratio
     elif kind_of_noise == 'brown':
-        exponent = 2
-        fmin = 0
-        size = [5]
-
-        samples = size[-1]
-
-        f = np.fft.rfftfreq(samples)
-
-        s_scale = f
-        fmin = max(fmin, 1. / samples)
-        ix = np.sum(s_scale < fmin)
-        if ix and ix < len(s_scale):
-            s_scale[:ix] = s_scale[ix]
-        s_scale = s_scale ** (-exponent / 2.)
-
-        w = s_scale[1:].copy()
-        w[-1] *= (1 + (samples % 2)) / 2.
-        sigma = 2 * np.sqrt(np.sum(w ** 2)) / samples
-
-        size[-1] = len(f)
-
-        dims_to_add = len(size) - 1
-        s_scale = s_scale[(np.newaxis,) * dims_to_add + (Ellipsis,)]
-
-        sr = np.random.normal(scale=s_scale, size=size)
-        si = np.random.normal(scale=s_scale, size=size)
-
-        if not (samples % 2): si[..., -1] = 0
-
-        si[..., 0] = 0
-
-        s = sr + 1J * si
-        noise = np.fft.irfft(s, n=samples, axis=-1) / sigma
-
-        combined = signal + noise  # / signal_and_noise
+        # TODO add brown noise
+        noise = ''
+        combined = signal.overlay(noise)
     combined.export('output_with_noise.wav', format="wav")
     return combined
 
 
-def add_background(background, background_level):
-    # TODO add_background
-    pass
+def add_background(speech_with_silence, background, background_level):
+    background = AudioSegment.from_file(background, format="wav")
+
+    louder_background = background + background_level
+
+    overlay = speech_with_silence.overlay(louder_background, loop=True)
+
+    speech_with_background = overlay.export("output_with_background.wav", format="wav")
+    return speech_with_background
 
 
 def main(dataset_dir, num_of_speakers, min_duration, max_duration, average_pause, output_duration, sample_rate,
-         signal_and_noise, kind_of_noise):
+         signal_and_noise, kind_of_noise, background, background_level):
     speakers_with_tracks = choose_speakers(dataset_dir, num_of_speakers, min_duration, max_duration)
     speech_with_silence = merge_audio(speakers_with_tracks, dataset_dir, average_pause, output_duration, sample_rate)
     speech_with_noise = add_noise(speech_with_silence, signal_and_noise, kind_of_noise)
+    speech_with_background = add_background(speech_with_silence, background, background_level)
 
 
 if __name__ == '__main__':
@@ -149,8 +124,8 @@ if __name__ == '__main__':
     output_duration = int(input("output_duration in s: "))
     signal_and_noise = int(input("signal_and_noise: "))
     kind_of_noise = str(input("kind_of_noise: "))
-    # background = str(input("background: "))
-    # background_level = int(input("background_level: "))
+    background = str(input("background: "))
+    background_level = int(input("background_level: "))
     sample_rate = int(input("sample_rate: "))
     main(dataset_dir, num_of_speakers, min_duration, max_duration, average_pause, output_duration, sample_rate,
-         signal_and_noise, kind_of_noise)
+         signal_and_noise, kind_of_noise, background, background_level)
