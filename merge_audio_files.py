@@ -6,7 +6,6 @@ from datetime import timedelta
 import scipy
 import librosa
 import numpy as np
-import soundfile as sf
 from pydub import AudioSegment
 from pydub.generators import WhiteNoise
 
@@ -64,20 +63,20 @@ def merge_audio(tracks, dataset_dir, average_pause, output_duration, sample_rate
         for i in tqdm(range(0, len(tracks[speaker]) - 1)):
             if i == 0:  # if it's first file
                 track1 = f'{tracks_dir}/{tracks[speaker][i]}'
-                x, s_r = librosa.load(track1, duration=5)  # load audio file
-                first_part = librosa.resample(x, s_r, sample_rate)  # change to desired sample rate
+                first_part = AudioSegment.from_file(track1, format="wav")  # load audio file
+                first_part = first_part.set_frame_rate(sample_rate)  # change to desired sample rate
             else:
                 first_part = res
             track2 = f'{tracks_dir}/{tracks[speaker][i + 1]}'
-            y, s_r = librosa.load(track2, duration=5)  # load audio file
-            second_part = librosa.resample(y, s_r, sample_rate)  # change to desired sample rate
+            second_part = AudioSegment.from_file(track2, format="wav")  # load audio file
+            second_part = second_part.set_frame_rate(sample_rate)  # change to desired sample rate
             # TODO add mixer to audio
-            res = np.append(first_part, second_part)  # merge audio files of each speaker
+            res = first_part.append(second_part, crossfade=20)  # merge audio files of each speaker with crossfade
         name_of_file = f'{tracks_dir.split("/")[-2]}.wav'
-        sf.write(name_of_file, res, sample_rate)  # save audio file of each speaker
+        res.export(name_of_file, format="wav")  # save audio file of each speaker
         silence_segment = AudioSegment.silent(duration=average_pause)
         silence = timedelta(milliseconds=average_pause)  # create silence time part
-        speech = AudioSegment.from_wav(name_of_file)  # load audio file of each speaker
+        speech = AudioSegment.from_file(name_of_file, format="wav")  # load audio file of each speaker
 
         if first:  # if it's first speaker
             start_time = silence + timedelta(seconds=speech.duration_seconds)  # silence + speaker time
